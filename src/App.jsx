@@ -528,6 +528,33 @@ function Dashboard({ data, loading, setPage }) {
     [products]
   );
 
+  const warehouseById = useMemo(() => Object.fromEntries(warehouses.map((w) => [w.id, w])), [warehouses]);
+  const shelfById = useMemo(() => Object.fromEntries(shelves.map((s) => [s.id, s])), [shelves]);
+  const locationsByProduct = useMemo(() => {
+    const map = {};
+    locations.forEach((l) => {
+      if (!map[l.productId]) map[l.productId] = [];
+      map[l.productId].push(l);
+    });
+    return map;
+  }, [locations]);
+
+  const describeLocations = (productId) => {
+    const locs = locationsByProduct[productId] || [];
+    if (locs.length === 0) return "No location assigned";
+    const first = locs[0];
+    const w = warehouseById[first.warehouseId];
+    const s = shelfById[first.shelfId];
+    const text = `${w?.name || "Unknown warehouse"} / ${s?.name || "Unknown shelf"} (Col ${first.column}, Part ${first.part})`;
+    return locs.length > 1 ? `${text} +${locs.length - 1} more` : text;
+  };
+
+  const describeReference = (p) => {
+    if (p.oem_reference) return p.oem_reference;
+    if (p.references && p.references.length) return p.references[0].code;
+    return "No reference";
+  };
+
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Overview of your stock across all warehouses." />
@@ -549,13 +576,18 @@ function Dashboard({ data, loading, setPage }) {
             {lowStock.slice(0, 8).map((p) => (
               <div key={p.id} onClick={() => setPage("products")} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 18px",
-                borderBottom: `1px solid ${COLORS.border}`, cursor: "pointer",
+                borderBottom: `1px solid ${COLORS.border}`, cursor: "pointer", gap: 12,
               }}>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: COLORS.text900 }}>{p.name}</div>
-                  <div style={{ fontSize: 11.5, color: COLORS.text400 }}>Alert threshold: {Number(p.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD).toLocaleString()}</div>
+                  <div style={{ fontSize: 11.5, color: COLORS.text400, display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
+                    <Mono style={{ color: COLORS.text600 }}>{describeReference(p)}</Mono>
+                    <span>·</span>
+                    <span>{describeLocations(p.id)}</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: COLORS.text400, marginTop: 2 }}>Alert threshold: {Number(p.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD).toLocaleString()}</div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                   <TrendingDown size={14} color={COLORS.danger} />
                   <Mono style={{ color: COLORS.danger, fontWeight: 700, fontSize: 13.5 }}>{Number(p.total_quantity || 0).toLocaleString()}</Mono>
                 </div>
@@ -1785,6 +1817,21 @@ function AppShell() {
       const batch = writeBatch(db);
       batch.set(doc(db, COLLECTIONS.sales, sale.id), sale);
       batch.set(doc(db, COLLECTIONS.products, productId), { ...product, total_quantity: nextQuantity, id: productId });
+
+      // Also deduct the sold quantity from the product's actual storage location(s),
+      // so Product Locations stays in sync with what was sold.
+      let remaining = Number(form.quantity || 0);
+      const productLocations = locations.filter((l) => l.productId === productId);
+      for (const loc of productLocations) {
+        if (remaining <= 0) break;
+        const currentQty = Number(loc.quantity || 0);
+        const deduct = Math.min(remaining, currentQty);
+        if (deduct > 0) {
+          batch.set(doc(db, COLLECTIONS.locations, loc.id), { ...loc, quantity: currentQty - deduct, id: loc.id });
+          remaining -= deduct;
+        }
+      }
+
       await batch.commit();
     },
   };
