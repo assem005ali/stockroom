@@ -1421,6 +1421,11 @@ function BrowsePage({ data }) {
   }, [warehouses, warehouseId]);
 
   const productById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  const describeReference = (p) => {
+    if (p.oem_reference) return p.oem_reference;
+    if (p.references && p.references.length) return p.references[0].code;
+    return null;
+  };
   const whShelves = shelves.filter((s) => s.warehouseId === warehouseId);
   const shelf = shelves.find((s) => s.id === shelfId);
 
@@ -1429,7 +1434,11 @@ function BrowsePage({ data }) {
   const grid = useMemo(() => {
     if (!shelf) return null;
     const map = {};
-    locations.filter((l) => l.shelfId === shelf.id).forEach((l) => { map[`${l.column}-${l.part}`] = l; });
+    locations.filter((l) => l.shelfId === shelf.id).forEach((l) => {
+      const key = `${l.column}-${l.part}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(l);
+    });
     return map;
   }, [locations, shelf]);
 
@@ -1534,25 +1543,37 @@ function BrowsePage({ data }) {
                 <div key={ci} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ textAlign: "center", fontFamily: "'Fira Code', monospace", fontSize: 11, color: "#6E8399", letterSpacing: 1 }}>COL {ci + 1}</div>
                   {Array.from({ length: shelf.totalParts }).map((__, pi) => {
-                    const loc = grid[`${ci + 1}-${pi + 1}`];
-                    const product = loc ? productById[loc.productId] : null;
+                    const slotLocations = grid[`${ci + 1}-${pi + 1}`] || [];
+                    const hasProducts = slotLocations.length > 0;
                     return (
                       <div
                         key={pi}
                         style={{
-                          background: product ? "#1C3A54" : "#122A3E",
-                          border: `1px solid ${product ? COLORS.accent500 : "#254865"}`,
+                          background: hasProducts ? "#1C3A54" : "#122A3E",
+                          border: `1px solid ${hasProducts ? COLORS.accent500 : "#254865"}`,
                           borderRadius: 8, padding: "10px 10px", minHeight: 64, position: "relative",
                         }}
                       >
                         <div style={{ position: "absolute", top: 6, right: 8, fontFamily: "'Fira Code', monospace", fontSize: 9.5, color: "#5C7A93" }}>
                           {ci + 1}-{pi + 1}
                         </div>
-                        {product ? (
-                          <div>
-                            <div style={{ color: "#fff", fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginBottom: 4, paddingRight: 20 }}>{product.name}</div>
-                            <div style={{ fontFamily: "'Fira Code', monospace", fontSize: 12, color: COLORS.accent500, fontWeight: 600 }}>{Number(loc.quantity || 0).toLocaleString()}</div>
-                            <div style={{ fontSize: 10.5, color: "#8FA6B8", marginTop: 2 }}>{product.piece_product_name || ""}</div>
+                        {hasProducts ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {slotLocations.map((loc) => {
+                              const product = productById[loc.productId];
+                              if (!product) return null;
+                              const ref = describeReference(product);
+                              return (
+                                <div key={loc.id} style={{ paddingRight: 20 }}>
+                                  <div style={{ color: "#fff", fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginBottom: 4 }}>{product.name}</div>
+                                  {ref && (
+                                    <div style={{ fontFamily: "'Fira Code', monospace", fontSize: 10.5, color: "#6E8399", marginBottom: 3 }}>{ref}</div>
+                                  )}
+                                  <div style={{ fontFamily: "'Fira Code', monospace", fontSize: 12, color: COLORS.accent500, fontWeight: 600 }}>{Number(loc.quantity || 0).toLocaleString()}</div>
+                                  <div style={{ fontSize: 10.5, color: "#8FA6B8", marginTop: 2 }}>{product.piece_product_name || ""}</div>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           <div style={{ color: "#4A6478", fontSize: 11.5, marginTop: 20, textAlign: "center" }}>Empty</div>
