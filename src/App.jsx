@@ -460,7 +460,7 @@ function Sidebar({ page, setPage, collapsed, setCollapsed, mobileOpen, setMobile
         flexDirection: "column", transition: "width 0.18s ease", height: "100%",
         position: mobileOpen ? "fixed" : "relative", zIndex: 50, left: mobileOpen ? 0 : undefined, top: 0,
       }}
-      className={mobileOpen ? "stockroom-sidebar-mobile" : ""}
+      className={`stockroom-sidebar-panel ${mobileOpen ? "stockroom-sidebar-mobile-open" : ""}`}
       >
         <div style={{
           display: "flex", alignItems: "center", gap: 10, padding: "18px 16px", borderBottom: `1px solid ${COLORS.navy800}`,
@@ -1903,13 +1903,16 @@ function AppShell() {
         button:active { transform: scale(0.98); }
         select, input, textarea { font-family: 'Fira Sans', sans-serif; }
         @media (max-width: 760px) {
-          .stockroom-sidebar-mobile { position: fixed !important; height: 100vh !important; }
+          .stockroom-sidebar-panel { display: none !important; }
+          .stockroom-sidebar-panel.stockroom-sidebar-mobile-open {
+            display: flex !important; position: fixed !important; inset: 0 auto 0 0 !important;
+            height: 100vh !important; z-index: 50 !important;
+          }
+          .stockroom-mobile-topbar { display: flex !important; }
         }
       `}</style>
 
-      <div style={{ display: window.innerWidth < 760 && !mobileOpen ? "none" : "block" }}>
-        <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
-      </div>
+      <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <div style={{
